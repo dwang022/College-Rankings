@@ -1,0 +1,285 @@
+---
+title: "College Rankings"
+author: "Daniel Wang"
+date: "2024-02-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readr)
+
+```
+
+```{r}
+qs_rankings <- read_csv("qs-world-university-rankings-2017-to-2022-V2.csv")
+ucla_time <- qs_rankings %>% filter(university == "University of California, Los Angeles (UCLA)") %>% select(c(university, year, rank_display))# use this to create public/private column, country,city,region column, over time
+ucla_time$rank_display <- as.integer(ucla_time$rank_display)
+
+# New data to add
+new_data <- data.frame(
+  university = c("University of California, Los Angeles (UCLA)", "University of California, Los Angeles (UCLA)"),
+  year = c(2023, 2024),
+  rank_display = c(44, 29)
+)
+
+new_df <- rbind(ucla_time, new_data)
+
+new_df %>%
+  ggplot(aes(x = year, y = rank_display)) +
+  geom_line(color = "skyblue") +  # Set line color
+  labs(x = "Year", y = "Rank", title = "UCLA Ranking Over Time") +  # Set axis labels and plot title
+  theme(plot.title = element_text(size = 16),  # Customize plot title
+        axis.title = element_text(size = 14),  # Customize axis labels
+        axis.text = element_text(size = 12))  + scale_y_reverse()  # Flip the y-axis  # Customize axis tick labels
+
+
+ggsave("ucla_ranking_over_time.png")
+
+```
+
+
+```{r}
+qs_rankings$rank_display = as.integer(qs_rankings$rank_display)
+df2 <- qs_rankings %>% filter(year == 2022) %>% filter(rank_display <= 250) %>% select(university, country, city, region, type)
+df3 <- qs_rankings %>% filter(year == 2017) %>% select(university, rank_display, score)
+```
+
+
+
+```{r}
+main_data <- read_csv("coded.csv")
+```
+
+```{r}
+main_data$university[7] <- "ETH Zurich - Swiss Federal Institute of Technology"
+main_data$university[26] <- "Nanyang Technological University, Singapore (NTU)"
+main_data$university[24] <- "Université PSL"
+main_data$university[34] <- "The Australian National University"
+main_data$university[36] <- "EPFL"
+main_data$university[54] <- "Ludwig-Maximilians-Universität München"
+main_data$university[71] <- "Université Paris-Saclay"
+main_data$university[86] <- "Universidade de São Paulo"
+main_data$university[88] <- "Ruprecht-Karls-Universität Heidelberg"
+main_data$university[94] <- "Universidad Nacional Autónoma de México  (UNAM)"
+main_data$university[103] <- "Pontificia Universidad Católica de Chile (UC)"
+
+
+```
+
+
+```{r}
+qs_rankings %>% filter(year == 2017) %>% arrange(desc(score))
+```
+
+
+```{r}
+# Merge the two datasets based on the university column
+merged_data <- merge(main_data, df2, by = "university", all.x = TRUE)
+
+
+merged_data <- merged_data %>% arrange(desc(overall_score))
+
+merged_data$rank <- gsub("=", "", merged_data$rank)
+merged_data$rank <- as.numeric(merged_data$rank)
+
+
+
+```
+
+
+```{r}
+write.csv(merged_data, "full_2024_data.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
+# risers and fallers
+```{r}
+merged_data2 <- merge(main_data, df3, by = "university", all.x = TRUE)
+
+
+merged_data2 <- merged_data2 %>% arrange(desc(overall_score))
+
+merged_data2$rank <- gsub("=", "", merged_data2$rank)
+merged_data2$rank <- as.numeric(merged_data2$rank)
+
+
+
+merged_data2 <- merged_data2 %>% mutate(fall = rank - rank_display)
+
+merged_data2 %>% arrange(fall)
+merged_data2 %>% arrange(desc(fall))
+
+```
+# Top Risers: Université Paris-Saclay, University of Technology Sydney, Universiti Malaya (UM), Zhejiang University, The Hong Kong Polytechnic University
+# Top US Risers: UCB, Penn State, UofT, UT Austin, NYU, Upenn, Carnegie Mellon
+# Top Fallers: UW-Madison, Tokyo Tech, Duke, Georgia Tech, University of Nottingham, Brown, UCSD, Northwestern
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(readr)
+ucla <- read_csv("ucla.csv")
+
+
+```
+
+```{r}
+library(tidyr)
+library(tidyverse)
+library(stringr)
+
+# Filter out the "Overall Score" category
+ucla_df_filtered <- ucla %>%
+  select(-c(overall_score))
+
+# Pivot the filtered data frame to have one column for categories and one column for scores
+ucla_pivot <- pivot_longer(ucla_df_filtered, cols = -c(rank, university), names_to = "Category", values_to = "Score")
+
+# Arrange the data by score in descending order
+ucla_pivot <- ucla_pivot %>%
+  arrange(desc(Score))
+
+ucla_pivot$Category <- str_to_title(str_replace_all(ucla_pivot$Category, "_", " "))
+
+# Plotting the bar chart
+library(ggplot2)
+
+ggplot(ucla_pivot, aes(x = reorder(Category, Score), y = Score)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Category", y = "Score", title = "UCLA Scores in Each Category") +
+  coord_flip()  # Flip the coordinates to make it horizontal
+
+
+ggsave("ucla_bar.png")
+
+
+
+```
+```{r}
+install.packages("fmsb")
+library(fmsb)
+```
+
+
+```{r}
+data <- ucla
+
+data_numeric <- sapply(data[-1, ], as.numeric)
+
+# Remove the Overall Score column from the data
+data <- data[, -2]  # Assuming Overall Score is the second column
+
+# Selecting only numeric variables (excluding University)
+data_numeric <- data[, -1]
+
+data_numeric <- data_numeric[-1]
+
+
+# Scale the data to a range of [0, 1]
+data_scaled <- apply(data_numeric, 2, function(x) (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
+
+# Plotting radar chart
+radarchart(
+  data_scaled,
+  axistype = 1,
+  # Customize labels
+  pcol = rgb(0.2, 0.5, 0.5, 0.9),
+  pfcol = rgb(0.2, 0.5, 0.5, 0.5),
+  plwd = 2,
+  # Add legend
+  cglcol = "grey", cglty = 1, axislabcol = "black",
+  # Customize scale
+  vlcex = 0.8,
+  title = "UCLA Ranking Criteria"
+)
+
+```
+
+
+
+
+```{r}
+ucb <- read_csv("ucb.csv")
+
+```
+
+
+```{r}
+# Filter out the "Overall Score" category
+ucb_df_filtered <- ucb %>%
+  select(-c(overall_score))
+
+# Pivot the filtered data frame to have one column for categories and one column for scores
+ucb_pivot <- pivot_longer(ucb_df_filtered, cols = -c(rank, university), names_to = "Category", values_to = "Score")
+
+# Arrange the data by score in descending order
+ucb_pivot <- ucb_pivot %>%
+  arrange(desc(Score))
+
+ucb_pivot$Category <- str_to_title(str_replace_all(ucla_pivot$Category, "_", " "))
+
+# Plotting the bar chart
+library(ggplot2)
+
+ggplot(ucb_pivot, aes(x = reorder(Category, Score), y = Score)) +
+  geom_bar(stat = "identity", fill = "darkblue") +
+  labs(x = "Category", y = "Score", title = "UC Berkeley Scores in Each Category") +
+  coord_flip()  # Flip the coordinates to make it horizontal
+
+
+ggsave("ucb_bar.png")
+
+```
+
+
+```{r}
+ucsd <- read_csv("ucsd.csv")
+
+
+# Filter out the "Overall Score" category
+ucsd_df_filtered <- ucsd %>%
+  select(-c(overall_score))
+
+# Pivot the filtered data frame to have one column for categories and one column for scores
+ucsd_pivot <- pivot_longer(ucsd_df_filtered, cols = -c(rank, university), names_to = "Category", values_to = "Score")
+
+# Arrange the data by score in descending order
+ucsd_pivot <- ucsd_pivot %>%
+  arrange(desc(Score))
+
+ucsd_pivot$Category <- str_to_title(str_replace_all(ucsd_pivot$Category, "_", " "))
+
+# Plotting the bar chart
+
+ggplot(ucsd_pivot, aes(x = reorder(Category, Score), y = Score)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Category", y = "Score", title = "UCSD Scores in Each Category") +
+  coord_flip()  # Flip the coordinates to make it horizontal
+
+
+ggsave("ucsd_bar.png")
+
+```
+
+
+
+
